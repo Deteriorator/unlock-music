@@ -1,23 +1,23 @@
-import {AudioMimeType, GetArrayBuffer, GetFileInfo, GetMetaCoverURL, IsBytesEqual} from "./util";
+import {Decrypt as RawDecrypt} from "@/decrypt/raw";
+import {DecryptResult} from "@/decrypt/entity";
+import {AudioMimeType, BytesHasPrefix, GetArrayBuffer, GetCoverFromFile, GetMetaFromFile} from "@/decrypt/utils.ts";
 
-import {Decrypt as RawDecrypt} from "./raw";
+import {parseBlob as metaParseBlob} from "music-metadata-browser";
 
-const musicMetadata = require("music-metadata-browser");
 const MagicHeader = [0x69, 0x66, 0x6D, 0x74]
 const MagicHeader2 = [0xfe, 0xfe, 0xfe, 0xfe]
-const FileTypeMap = {
+const FileTypeMap: { [key: string]: string } = {
     " WAV": ".wav",
     "FLAC": ".flac",
     " MP3": ".mp3",
     " A4M": ".m4a",
 }
 
-export async function Decrypt(file, raw_filename, raw_ext) {
+export async function Decrypt(file: File, raw_filename: string, raw_ext: string): Promise<DecryptResult> {
     const oriData = new Uint8Array(await GetArrayBuffer(file));
-    if (!IsBytesEqual(MagicHeader, oriData.slice(0, 4)) ||
-        !IsBytesEqual(MagicHeader2, oriData.slice(8, 12))) {
+    if (!BytesHasPrefix(oriData, MagicHeader) || !BytesHasPrefix(oriData.slice(8, 12), MagicHeader2)) {
         if (raw_ext === "xm") {
-            return {status: false, message: "此xm文件已损坏"}
+            throw Error("此xm文件已损坏")
         } else {
             return await RawDecrypt(file, raw_filename, raw_ext, true)
         }
@@ -25,7 +25,7 @@ export async function Decrypt(file, raw_filename, raw_ext) {
 
     let typeText = (new TextDecoder()).decode(oriData.slice(4, 8))
     if (!FileTypeMap.hasOwnProperty(typeText)) {
-        return {status: false, message: "未知的xm文件类型"}
+        throw Error("未知的.xm文件类型")
     }
 
     let key = oriData[0xf]
@@ -39,28 +39,27 @@ export async function Decrypt(file, raw_filename, raw_ext) {
     const mime = AudioMimeType[ext];
     let musicBlob = new Blob([audioData], {type: mime});
 
-    const musicMeta = await musicMetadata.parseBlob(musicBlob);
+    const musicMeta = await metaParseBlob(musicBlob);
     if (ext === "wav") {
         //todo:未知的编码方式
-        console.log(musicMeta.common)
+        console.info(musicMeta.common)
         musicMeta.common.album = "";
         musicMeta.common.artist = "";
         musicMeta.common.title = "";
     }
-    let _sep = raw_filename.indexOf("_") === -1 ? "-" : "_"
-    const info = GetFileInfo(musicMeta.common.artist, musicMeta.common.title, raw_filename, _sep);
-
-    const imgUrl = GetMetaCoverURL(musicMeta);
+    const {title, artist} = GetMetaFromFile(raw_filename,
+        musicMeta.common.title, musicMeta.common.artist,
+        raw_filename.indexOf("_") === -1 ? "-" : "_")
 
     return {
-        status: true,
-        title: info.title,
-        artist: info.artist,
-        ext: ext,
+        title,
+        artist,
+        ext,
+        mime,
         album: musicMeta.common.album,
-        picture: imgUrl,
+        picture: GetCoverFromFile(musicMeta),
         file: URL.createObjectURL(musicBlob),
-        mime: mime,
+        blob: musicBlob,
         rawExt: "xm"
     }
 }

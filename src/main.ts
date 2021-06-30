@@ -1,6 +1,6 @@
 import Vue from 'vue'
-import App from './App.vue'
-import './registerServiceWorker'
+import App from '@/App.vue'
+import '@/registerServiceWorker'
 import {
     Button,
     Checkbox,
@@ -18,7 +18,8 @@ import {
     Table,
     TableColumn,
     Tooltip,
-    Upload
+    Upload,
+    MessageBox
 } from 'element-ui';
 import 'element-ui/lib/theme-chalk/base.css';
 
@@ -39,9 +40,9 @@ Vue.use(Radio);
 Vue.use(Tooltip);
 Vue.use(Progress);
 Vue.prototype.$notify = Notification;
+Vue.prototype.$confirm = MessageBox.confirm;
 
 Vue.config.productionTip = false;
-document.getElementById("loader-source").remove()
 new Vue({
     render: h => h(App),
 }).$mount('#app');
